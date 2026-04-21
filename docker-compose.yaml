@@ -1,0 +1,78 @@
+version: '3'
+
+services:
+  db_source:
+    image: postgres:17
+    container_name: database_source
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: docker_pp
+      POSTGRES_PASSWORD: mypass
+    volumes:
+      - /home/hisoyamba/homework/init_scripts:/docker-entrypoint-initdb.d
+      - todo_db_source:/var/lib/postgresql/data
+    networks:
+      - todo_net
+    ports:
+      - "5432:5432"
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "psql -U docker_pp -d demo -c 'SELECT 1 FROM bookings.mart_route_sales LIMIT 1'" ]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+
+  db_target:
+    image: postgres:17
+    container_name: database_target
+    environment:
+      POSTGRES_DB: postgres_db_target
+      POSTGRES_USER: docker_pp
+      POSTGRES_PASSWORD: mypass
+    volumes:
+      - todo_db_target:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - todo_net
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U docker_pp -d postgres_db_target" ]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: python_script
+    environment:
+      HOST_SOURCE : database_source
+      PORT_SOURCE: 5432
+      DB_SOURCE: demo
+      DB_SOURCE_USERNAME: docker_pp
+      DB_SOURCE_PASSWORD: mypass
+      HOST_TARGET: database_target
+      PORT_TARGET: 5432
+      DB_TARGET: postgres_db_target
+      DB_TARGET_USERNAME: docker_pp
+      DB_TARGET_PASSWORD: mypass
+    depends_on:
+      db_source:
+        condition: service_healthy
+      db_target:
+        condition: service_healthy
+    networks:
+      - todo_net
+
+
+volumes:
+  todo_db_source:
+    name: todo_db_source
+  todo_db_target:
+    name: todo_db_target
+
+networks:
+  todo_net:
+    name: todo_net
